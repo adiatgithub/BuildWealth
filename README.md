@@ -3,7 +3,7 @@
 > **Autonomous Personal Wealth & Financial Intelligence Platform powered by Generative AI.**
 
 #Live Demo:-
-https://build-wealth-git-main-adiatgithubs-projects.vercel.app/
+https://build-wealth-nine.vercel.app/
 
 BuildWealth.AI is a full-stack personal finance application that transforms raw transactions into actionable financial intelligence. Featuring automated category budgeting, visual cashflow analytics, target savings milestones, natural language transaction parsing, and a 24/7 conversational AI Financial Advisor.
 
