@@ -1,4 +1,9 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8021/api";
+let rawBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:8021/api";
+rawBaseUrl = rawBaseUrl.trim().replace(/\/+$/, "");
+if (!rawBaseUrl.endsWith("/api")) {
+  rawBaseUrl = `${rawBaseUrl}/api`;
+}
+const API_BASE_URL = rawBaseUrl;
 
 const request = async (endpoint, options = {}) => {
   const token = localStorage.getItem("token");

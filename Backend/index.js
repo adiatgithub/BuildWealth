@@ -18,7 +18,7 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
-app.get("/", (req, res) => {
+const statusResponse = (req, res) => {
   res.json({
     status: "online",
     service: "BuildWealth.AI Backend API",
@@ -32,7 +32,10 @@ app.get("/", (req, res) => {
       test: "/api/test",
     },
   });
-});
+};
+
+app.get("/", statusResponse);
+app.get("/api", statusResponse);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/transactions", transactionRoutes);
