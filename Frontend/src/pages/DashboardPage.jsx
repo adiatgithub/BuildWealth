@@ -24,6 +24,8 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -43,6 +45,7 @@ const DashboardPage = () => {
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [chartType, setChartType] = useState("bar");
 
   // Quick Add Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -269,29 +272,79 @@ const DashboardPage = () => {
 
       {/* Visual Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Cash Flow Trend Bar Chart */}
+        {/* Cash Flow Trend Chart */}
         <div className="lg:col-span-2 p-6 rounded-2xl bg-card border border-border/70 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-base font-bold text-foreground">Cash Flow Activity</h2>
               <p className="text-xs text-muted-foreground">Income vs. Expenses across recent months</p>
+            </div>
+
+            {/* Chart Type Toggle */}
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-muted text-xs font-semibold self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setChartType("bar")}
+                className={`px-3 py-1 rounded-md transition-all ${
+                  chartType === "bar"
+                    ? "bg-card text-foreground shadow-sm font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Bar View
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartType("area")}
+                className={`px-3 py-1 rounded-md transition-all ${
+                  chartType === "area"
+                    ? "bg-card text-foreground shadow-sm font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Area View
+              </button>
             </div>
           </div>
 
           <div className="h-[280px] w-full">
             {trendData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#888888" fontSize={11} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.9)", borderColor: "#334155", borderRadius: "8px" }}
-                    formatter={(value) => `${currency}${value.toLocaleString()}`}
-                  />
-                  <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
-                  <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                {chartType === "bar" ? (
+                  <BarChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#888888" fontSize={11} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.9)", borderColor: "#334155", borderRadius: "8px" }}
+                      formatter={(value) => `${currency}${value.toLocaleString()}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+                    <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                ) : (
+                  <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#888888" fontSize={11} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.9)", borderColor: "#334155", borderRadius: "8px" }}
+                      formatter={(value) => `${currency}${value.toLocaleString()}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+                    <Area type="monotone" dataKey="income" name="Income" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorIncome)" />
+                    <Area type="monotone" dataKey="expense" name="Expense" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorExpense)" />
+                  </AreaChart>
+                )}
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-xs text-muted-foreground">

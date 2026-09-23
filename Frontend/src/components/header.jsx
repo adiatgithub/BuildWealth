@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { Button } from "./ui/button.jsx";
+import ThemeToggle from "./ThemeToggle.jsx";
 import {
   Sheet,
   SheetContent,
@@ -97,6 +98,7 @@ const Header = () => {
 
         {/* Right Section Auth / Actions */}
         <div className="hidden md:flex items-center gap-3">
+          <ThemeToggle />
           {isAuthenticated ? (
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/60 border border-border text-xs font-medium">
@@ -137,6 +139,7 @@ const Header = () => {
 
         {/* Mobile Navigation Trigger */}
         <div className="flex md:hidden items-center gap-2">
+          <ThemeToggle />
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" size="icon" className="h-9 w-9">

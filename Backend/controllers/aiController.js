@@ -1,5 +1,6 @@
 import Transaction from "../models/Transaction.js";
 import Budget from "../models/Budget.js";
+import Goal from "../models/Goal.js";
 import {
   parseNaturalLanguage,
   chatWithAdvisor,
@@ -31,14 +32,18 @@ export const chatAdvisor = async (req, res) => {
       return res.status(400).json({ message: "Message is required" });
     }
 
-    // Fetch user context
-    const transactions = await Transaction.find({ userId: req.user._id }).sort({ date: -1 }).limit(50);
-    const budgets = await Budget.find({ userId: req.user._id });
+    // Fetch live user context
+    const [transactions, budgets, goals] = await Promise.all([
+      Transaction.find({ userId: req.user._id }).sort({ date: -1 }).limit(50),
+      Budget.find({ userId: req.user._id }),
+      Goal.find({ userId: req.user._id }),
+    ]);
 
     const reply = await chatWithAdvisor({
       user: req.user,
       transactions,
       budgets,
+      goals,
       message,
       history,
     });
