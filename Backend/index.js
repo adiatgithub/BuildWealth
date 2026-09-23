@@ -36,6 +36,7 @@ const statusResponse = (req, res) => {
 
 app.get("/", statusResponse);
 app.get("/api", statusResponse);
+app.get("/api/health", statusResponse);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/transactions", transactionRoutes);
