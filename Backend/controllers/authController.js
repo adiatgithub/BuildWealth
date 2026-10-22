@@ -38,34 +38,46 @@ export const registerUser = async (req, res) => {
     let { name, email, password, currency, monthlyIncome } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "Please provide name, email, and password" });
+      return res.status(400).json({ message: "Please provide your name, email, and a secure password" });
     }
 
-    name = String(name).trim();
-    email = String(email).trim().toLowerCase();
+    if (typeof name !== "string" || typeof email !== "string" || typeof password !== "string") {
+      return res.status(400).json({ message: "Invalid input format provided" });
+    }
 
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ message: "Please provide a valid email address" });
+    name = name.trim();
+    email = email.trim().toLowerCase();
+
+    if (name.length < 2 || name.length > 70) {
+      return res.status(400).json({ message: "Name must be between 2 and 70 characters" });
+    }
+
+    if (email.length > 120 || !isValidEmail(email)) {
+      return res.status(400).json({ message: "Please enter a valid email address (e.g. name@example.com)" });
+    }
+
+    if (password.length > 128) {
+      return res.status(400).json({ message: "Password cannot exceed 128 characters" });
     }
 
     if (!isStrongPassword(password)) {
       return res.status(400).json({
         message:
-          "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character (!@#$%^&*)",
+          "Password must be at least 8 characters long and contain at least one uppercase letter (A-Z), one lowercase letter (a-z), one number (0-9), and one special symbol (!@#$%^&*)",
       });
     }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
-      return res.status(400).json({ message: "An account with this email already exists" });
+      return res.status(400).json({ message: "An account with this email address already exists. Please log in instead." });
     }
 
     const user = await User.create({
       name,
       email,
       password,
-      currency: currency || "$",
-      monthlyIncome: Number(monthlyIncome) || 0,
+      currency: typeof currency === "string" && ["$", "₹", "€", "£", "¥"].includes(currency) ? currency : "$",
+      monthlyIncome: Number(monthlyIncome) && Number(monthlyIncome) > 0 ? Number(monthlyIncome) : 0,
     });
 
     res.status(201).json({
@@ -75,36 +87,75 @@ export const registerUser = async (req, res) => {
       currency: user.currency,
       monthlyIncome: user.monthlyIncome,
       token: generateToken(user._id),
+      lastLoginAt: user.lastLoginAt,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || "Failed to register user" });
+    res.status(500).json({ message: error.message || "Failed to register user account" });
   }
 };
 
-// @desc    Authenticate user & get token
+// @desc    Authenticate user & get token with account lockout protection
 // @route   POST /api/auth/login
 export const loginUser = async (req, res) => {
   try {
     let { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: "Please provide email and password" });
+      return res.status(400).json({ message: "Please provide both email address and password" });
     }
 
-    email = String(email).trim().toLowerCase();
+    if (typeof email !== "string" || typeof password !== "string") {
+      return res.status(400).json({ message: "Invalid credentials format" });
+    }
+
+    if (password.length > 128) {
+      return res.status(400).json({ message: "Password length exceeds safety limit" });
+    }
+
+    email = email.trim().toLowerCase();
 
     const user = await User.findOne({ email });
 
-    // Mitigate timing attacks by performing constant-time hash comparison
+    // Mitigate timing attacks by performing constant-time hash comparison if user not found
     if (!user) {
       await bcrypt.compare(password, DUMMY_HASH);
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: "Invalid email or password. Please verify your credentials." });
+    }
+
+    // Check if account is temporarily locked
+    if (user.isLocked && user.isLocked()) {
+      const remainingMinutes = Math.max(1, Math.ceil((new Date(user.lockUntil).getTime() - Date.now()) / (60 * 1000)));
+      return res.status(423).json({
+        message: `Account is temporarily locked for your security due to 5 consecutive failed login attempts. Please try again in ${remainingMinutes} minute${remainingMinutes > 1 ? "s" : ""}, or use the Guest Demo.`,
+        locked: true,
+        remainingMinutes,
+      });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      // Record failed attempt
+      await user.incrementLoginAttempts();
+      
+      if (user.isLocked()) {
+        return res.status(423).json({
+          message: "Too many failed login attempts. Your account has been temporarily locked for 15 minutes to protect your financial data.",
+          locked: true,
+          remainingMinutes: 15,
+        });
+      }
+
+      const attemptsLeft = Math.max(0, 5 - (user.failedLoginAttempts || 0));
+      return res.status(401).json({
+        message: attemptsLeft <= 2
+          ? `Invalid email or password. ⚠️ Warning: ${attemptsLeft} attempt${attemptsLeft === 1 ? "" : "s"} remaining before a 15-minute security lock.`
+          : "Invalid email or password. Please try again.",
+        attemptsRemaining: attemptsLeft,
+      });
     }
+
+    // Login successful: reset failed attempt counter and record audit info
+    await user.resetLoginAttempts(req.ip);
 
     res.json({
       _id: user._id,
@@ -113,10 +164,11 @@ export const loginUser = async (req, res) => {
       currency: user.currency,
       monthlyIncome: user.monthlyIncome,
       savingsTarget: user.savingsTarget,
+      lastLoginAt: user.lastLoginAt,
       token: generateToken(user._id),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || "Failed to login" });
+    res.status(500).json({ message: error.message || "Failed to authenticate" });
   }
 };
 
@@ -124,9 +176,9 @@ export const loginUser = async (req, res) => {
 // @route   GET /api/auth/me
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("-password");
+    const user = await User.findById(req.user._id).select("-password -failedLoginAttempts -lockUntil");
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: "User profile not found" });
     }
     res.json(user);
   } catch (error) {

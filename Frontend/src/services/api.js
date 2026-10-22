@@ -22,12 +22,22 @@ const request = async (endpoint, options = {}) => {
     headers,
   });
 
-  const data = await response.json().catch(() => ({}));
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
 
   if (!response.ok) {
     const error = new Error(data.message || `Request failed with status ${response.status}`);
     error.status = response.status;
     error.data = data;
+    error.locked = response.status === 423 || Boolean(data.locked);
+    error.remainingMinutes = data.remainingMinutes;
+    error.attemptsRemaining = data.attemptsRemaining;
+    error.tokenExpired = data.code === "TOKEN_EXPIRED";
+    error.rateLimited = response.status === 429;
     throw error;
   }
 
@@ -35,6 +45,9 @@ const request = async (endpoint, options = {}) => {
 };
 
 export const api = {
+  // System Health
+  checkHealth: () => request("/health"),
+
   // Auth
   register: (userData) => request("/auth/register", { method: "POST", body: JSON.stringify(userData) }),
   login: (credentials) => request("/auth/login", { method: "POST", body: JSON.stringify(credentials) }),
@@ -71,6 +84,60 @@ export const api = {
   // AI
   parseTransaction: (text) => request("/ai/parse-transaction", { method: "POST", body: JSON.stringify({ text }) }),
   chatAdvisor: (message, history = []) => request("/ai/chat", { method: "POST", body: JSON.stringify({ message, history }) }),
+  streamChatAdvisor: async (message, history = [], onChunk, onDone) => {
+    const token = localStorage.getItem("token");
+    const response = await fetch(`${API_BASE_URL}/ai/chat-stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ message, history }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || `Streaming request failed with status ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let accumulated = "";
+    let actionChips = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const raw = decoder.decode(value, { stream: true });
+      const lines = raw.split("\n");
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.replace("data: ", "").trim());
+            if (data.chunk) {
+              accumulated += data.chunk;
+              if (onChunk) onChunk(data.chunk, accumulated);
+            }
+            if (data.done) {
+              if (data.actionChips && data.actionChips.length > 0) {
+                actionChips = data.actionChips;
+              }
+              if (data.reply) {
+                accumulated = data.reply;
+              }
+            }
+          } catch {
+            // partial chunk ignored
+          }
+        }
+      }
+    }
+
+    if (onDone) onDone(accumulated, actionChips);
+    return { reply: accumulated, actionChips };
+  },
   getInsights: () => request("/ai/insights"),
 };
 

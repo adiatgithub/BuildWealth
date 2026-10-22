@@ -142,7 +142,7 @@ const Header = () => {
           <ThemeToggle />
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="h-9 w-9">
+              <Button variant="outline" size="icon" className="h-9 w-9" aria-label="Open main navigation menu">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>

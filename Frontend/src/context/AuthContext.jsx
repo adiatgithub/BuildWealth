@@ -9,6 +9,22 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token") || null);
   const [loading, setLoading] = useState(true);
 
+  const [backendStatus, setBackendStatus] = useState({ online: null, checking: true });
+
+  // Probe backend health status on initialization
+  const checkBackendHealth = async () => {
+    try {
+      const health = await api.checkHealth();
+      setBackendStatus({ online: health.database?.status === "connected" || health.status === "healthy", data: health, checking: false });
+    } catch {
+      setBackendStatus({ online: false, checking: false });
+    }
+  };
+
+  useEffect(() => {
+    checkBackendHealth();
+  }, []);
+
   useEffect(() => {
     const fetchUser = async () => {
       if (token) {
@@ -17,6 +33,9 @@ export const AuthProvider = ({ children }) => {
           setUser(userData);
         } catch (error) {
           console.error("Failed to load user profile:", error);
+          if (error.tokenExpired) {
+            toast.info("Your session expired for security. Please sign in again.");
+          }
           logout();
         }
       }
@@ -35,7 +54,13 @@ export const AuthProvider = ({ children }) => {
       toast.success(`Welcome back, ${data.name}!`);
       return data;
     } catch (error) {
-      toast.error(error.message || "Failed to login");
+      if (error.locked) {
+        toast.error(`Security Lockout: ${error.message}`, { duration: 7000 });
+      } else if (error.rateLimited) {
+        toast.error("Security Hold: Too many attempts. Please pause for 5 minutes.", { duration: 6000 });
+      } else {
+        toast.error(error.message || "Failed to sign in. Please verify your credentials.");
+      }
       throw error;
     }
   };
@@ -46,10 +71,10 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("token", data.token);
       setToken(data.token);
       setUser(data);
-      toast.success("Account created successfully!");
+      toast.success("Account created successfully! Welcome to BuildWealth.AI");
       return data;
     } catch (error) {
-      toast.error(error.message || "Registration failed");
+      toast.error(error.message || "Registration failed. Please check your details.");
       throw error;
     }
   };
@@ -58,7 +83,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("token");
     setToken(null);
     setUser(null);
-    toast.info("Logged out successfully");
+    toast.info("You have signed out safely.");
   };
 
   const updateProfile = async (data) => {
@@ -135,6 +160,8 @@ export const AuthProvider = ({ children }) => {
         logout,
         updateProfile,
         loginAsDemo,
+        backendStatus,
+        checkBackendHealth,
         isAuthenticated: !!user,
       }}
     >
