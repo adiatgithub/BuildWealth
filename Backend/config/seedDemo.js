@@ -21,6 +21,7 @@ export const seedDemoAccountIfMissing = async () => {
         currency: "$",
         monthlyIncome: 6500,
         savingsTarget: 15000,
+        isVerified: true,
       });
 
       const seedTransactions = [

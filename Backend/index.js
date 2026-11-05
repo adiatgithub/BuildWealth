@@ -1,14 +1,15 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import helmet from "helmet";
 import mongoose from "mongoose";
 
-// Load environment variables immediately
-dotenv.config();
+// Load and validate centralized environment configuration immediately
+import config, { validateEnv } from "./config/env.js";
+validateEnv();
 
 import connectDB from "./config/db.js";
 import { seedDemoAccountIfMissing } from "./config/seedDemo.js";
+import cookieParser from "./middleware/cookieParser.js";
 import authRoutes from "./routes/authRoutes.js";
 import transactionRoutes from "./routes/transactionRoutes.js";
 import budgetRoutes from "./routes/budgetRoutes.js";
@@ -17,6 +18,9 @@ import aiRoutes from "./routes/aiRoutes.js";
 import testRoutes from "./routes/testRoute.js";
 
 const app = express();
+
+// Trust reverse proxy headers for rate limiting and IP resolution
+app.set("trust proxy", 1);
 
 // Security Headers Middleware
 app.use(
@@ -33,7 +37,7 @@ const allowedOrigins = [
   "http://localhost:4173",
   "http://127.0.0.1:5173",
   "http://127.0.0.1:3000",
-  process.env.FRONTEND_URL,
+  config.FRONTEND_URL,
 ].filter(Boolean);
 
 app.use(
@@ -51,6 +55,9 @@ app.use(
   })
 );
 
+// Built-in Cookie Parser
+app.use(cookieParser);
+
 // Payload size limiting to prevent payload flooding / DoS
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
@@ -60,7 +67,7 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (process.env.NODE_ENV !== "test") {
+    if (config.NODE_ENV !== "test") {
       const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
       console.log(`[${timestamp}] ${req.method} ${req.originalUrl} ${res.statusCode} (${duration}ms)`);
     }
@@ -88,7 +95,7 @@ const getHealthStatus = () => {
       status: dbStatusMap[dbState] || "unknown",
       host: mongoose.connection.host || "none",
     },
-    environment: process.env.NODE_ENV || "development",
+    environment: config.NODE_ENV,
     endpoints: {
       auth: "/api/auth",
       transactions: "/api/transactions",
@@ -131,12 +138,12 @@ app.use((err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   res.status(status).json({
     message: err.message || "An unexpected internal server error occurred",
-    ...(process.env.NODE_ENV === "development" ? { stack: err.stack } : {}),
+    ...(config.NODE_ENV === "development" ? { stack: err.stack } : {}),
   });
 });
 
-// Port configuration: Defaults to 8021 to match Frontend expectations
-const PORT = parseInt(process.env.PORT, 10) || 8021;
+// Port configuration
+const PORT = config.PORT;
 
 let server;
 
@@ -150,7 +157,7 @@ const startServer = async () => {
       console.log(`  BuildWealth.AI Backend API running!`);
       console.log(`  Local URL:   http://localhost:${PORT}`);
       console.log(`  Health:      http://localhost:${PORT}/api/health`);
-      console.log(`  Environment: ${process.env.NODE_ENV || "development"}`);
+      console.log(`  Environment: ${config.NODE_ENV}`);
       console.log(`===============================================`);
     });
   } catch (error) {
@@ -181,4 +188,9 @@ const handleShutdown = async (signal) => {
 process.on("SIGTERM", () => handleShutdown("SIGTERM"));
 process.on("SIGINT", () => handleShutdown("SIGINT"));
 
-startServer();
+if (process.env.NODE_ENV !== "test") {
+  startServer();
+}
+
+export { app, startServer };
+export default app;

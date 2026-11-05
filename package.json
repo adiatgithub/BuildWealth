@@ -1,0 +1,11 @@
+{
+  "name": "ai_finance_tracker",
+  "private": true,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "supertest": "^7.3.1",
+    "vitest": "^5.1.0"
+  }
+}
